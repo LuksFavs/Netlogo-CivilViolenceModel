@@ -3,15 +3,18 @@ breed [ citizens citizen ]
 breed [ bs b ]
 breed [ gs g ]
 cops-own [ jailed ]
-citizens-own [Grievance Hardship Risk PP NetRisk radicalizar myc jailtime jailed]
-bs-own [Grievance Hardship Risk PP NetRisk radicalizar myc]
-gs-own [Grievance Hardship Risk PP NetRisk radicalizar myc ]
-globals [ prisoes Population]
+citizens-own [Grievance Hardship Risk PP NetRisk radicalizar
+  myc jailtime jailed]
+bs-own [Grievance Hardship Risk PP NetRisk age myc jailed radicalizar ]
+gs-own [Grievance Hardship Risk PP NetRisk age myc jailed radicalizar]
+globals [ prisoes Population births assassinatos]
 ;PP = Prision Probability
 to setup
   clear-all
   reset-ticks
   set prisoes 0
+  set births 0
+  set assassinatos 0
   set Population 41 * 41 * PopulationDen
   create-cops ( Population * policePresence ) [
     set shape "circle"
@@ -27,10 +30,9 @@ to setup
       set heading 0
       set myc color
       set jailed False
-      set Risk  (random-float 1)
+      set Risk (random-float 1)
+      set Hardship random-float 1
       setxy  random-pxcor random-pycor
-
-      set Hardship (random-float 1)
       setPP
       set radicalizar 0
     ]
@@ -40,19 +42,28 @@ to setup
       set shape "circle"
       set color blue
       set heading 0
+      set jailed False
       set myc color
       set Risk  (random-float 1)
+      set Hardship random-float 1
       setxy  random-pxcor random-pycor
+      set age random maxAge
       setPP
+      if any? turtles-here [
+        move
+      ]
     ]
 
     create-gs ( Population * ( 1 - policePresence) / 2) [
       set shape "circle"
       set color green
       set heading 0
+      set jailed False
       set myc color
       set Risk  (random-float 1)
+      set Hardship random-float 1
       setxy  random-pxcor random-pycor
+      set age random maxAge
       setPP
       if any? turtles-here [
         move
@@ -64,6 +75,8 @@ end
 
 to go
   tick
+  set assassinatos 0
+  set births 0
   ifelse model [
     ask citizens [
       jail
@@ -77,11 +90,17 @@ to go
       move
       setPP
       Rebel?
+      birth
+      murder
+      death
     ]
     ask gs [
       move
       setPP
       Rebel?
+      birth
+      murder
+      death
     ]
   ]
   ask cops [
@@ -108,14 +127,7 @@ to Rebel?
     ifelse Q > T [
       set color red
     ][
-    set color myc
-      let radical? random-float 1
-      ifelse radical? > 0.5 [
-      set radicalizar radicalizar * 0.99
-      ]
-      [
-        set radicalizar radicalizar * 1.05
-      ]
+      set color myc
     ]
   ]
 
@@ -135,13 +147,14 @@ to jail
     ]
   ]
 end
+
 to arrest
   ask cops[
     let vizinhos citizens with [ distance myself < visioncop and color = red]
     if any? vizinhos with [ color = red and jailed = False ] [
       ask one-of vizinhos [
         let prisao random-float 1
-        if prisao < 0.3[
+        if prisao < 0.3 and model [
           set jailtime random JailMax
           set radicalizar 0
           set jailed True
@@ -149,9 +162,50 @@ to arrest
           set myc color
           home
         ]
+        if not model [
+          die
+        ]
       ]
     ]
   ]
+end
+
+to murder
+  if color = red [
+    let murders 1
+    let mybreed breed
+    let vizinhos turtles with [ distance myself < vision ]
+    if any? vizinhos [
+      ask one-of vizinhos [
+        if murders = 1 and breed != mybreed [
+          set murders 0
+          set assassinatos assassinatos + 1
+          die
+        ]
+      ]
+    ]
+  ]
+end
+
+
+to birth
+  let chance random-float 1.
+  let vizinhosVazios neighbors with [ not any? turtles-here ]
+  if any? vizinhosVazios and chance < chanceBirth [
+    let aux random count vizinhosVazios
+    hatch aux [ set age random maxAge move ]
+    set births births + aux
+  ]
+end
+
+to death
+  ifelse age > 0 [
+    set age age - 1
+  ]
+  [
+    die
+  ]
+
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -175,8 +229,8 @@ GRAPHICS-WINDOW
 40
 0
 40
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -189,7 +243,7 @@ CHOOSER
 model
 model
 true false
-0
+1
 
 SLIDER
 19
@@ -200,7 +254,7 @@ Legitimacy
 Legitimacy
 0
 1
-0.89
+0.9
 0.01
 1
 NIL
@@ -242,9 +296,9 @@ NIL
 
 BUTTON
 57
-141
+137
 150
-175
+171
 Run 1 tick
 go
 NIL
@@ -266,7 +320,7 @@ policePresence
 policePresence
 0
 0.5
-0.04
+0.0
 0.01
 1
 %
@@ -355,10 +409,10 @@ PopulationDen
 HORIZONTAL
 
 PLOT
-326
-478
-526
-628
+685
+316
+885
+466
 rebeldes e prisoneiros
 NIL
 NIL
@@ -372,12 +426,13 @@ false
 PENS
 "default" 1.0 0 -16777216 true "" "plot count turtles with [ color = red and hidden? = False ]"
 "pen-1" 1.0 0 -3844592 true "" "plot count turtles with [ color = orange and hidden? = False ]"
+"pen-2" 1.0 0 -14730904 true "" "plot count turtles with [ color = orange and hidden? = False ] + count turtles with [ color = red and hidden? = False ]"
 
 PLOT
-535
-478
-735
-628
+684
+163
+884
+313
 População Carceraria
 NIL
 NIL
@@ -422,10 +477,10 @@ patches
 HORIZONTAL
 
 MONITOR
-266
-522
-316
-567
+423
+473
+473
+518
 jailed
 count citizens with [ jailed = True ]
 17
@@ -433,12 +488,124 @@ count citizens with [ jailed = True ]
 11
 
 MONITOR
-164
-524
-262
-569
+321
+475
+419
+520
 presos + rebeldes
 count citizens with [ color = red ] + count citizens with [ color = orange ]
+17
+1
+11
+
+SLIDER
+23
+473
+195
+506
+maxAge
+maxAge
+0
+100
+44.0
+1
+1
+ticks
+HORIZONTAL
+
+SLIDER
+20
+174
+192
+207
+chanceBirth
+chanceBirth
+0
+1
+0.06
+0.01
+1
+NIL
+HORIZONTAL
+
+MONITOR
+199
+523
+256
+568
+blues
+count bs
+17
+1
+11
+
+MONITOR
+261
+523
+321
+568
+greens
+count gs
+17
+1
+11
+
+MONITOR
+326
+523
+383
+568
+NIL
+births
+17
+1
+11
+
+PLOT
+682
+10
+882
+160
+população total
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count turtles"
+"pen-1" 1.0 0 -13345367 true "" "plot count bs"
+"pen-2" 1.0 0 -14439633 true "" "plot count gs"
+
+PLOT
+688
+473
+888
+623
+nascimentos
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot births"
+
+MONITOR
+388
+523
+470
+568
+NIL
+assassinatos
 17
 1
 11
